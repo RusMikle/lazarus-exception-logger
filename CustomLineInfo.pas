@@ -22,13 +22,12 @@ interface
 {$S-}
 {$Q-}
 
-function GetLineInfo(addr:ptruint;var func,source:shortstring;var line:longint) : boolean;
 function StabBackTraceStr(addr:Pointer):shortstring;
 
 implementation
 
 uses
-  exeinfo,strings;
+  exeinfo,strings,lnfodwrf;
 
 const
   N_Function    = $24;
@@ -70,7 +69,7 @@ var
   linestab,             { stab with current line info }
   dirstab,              { stab with current directory info }
   filestab   : tstab;   { stab with current file info }
-  filename: shortstring;
+  filename: ansistring;
   dbgfn : string;
 
 
@@ -224,138 +223,6 @@ end;
 procedure CloseStabs;
 begin
   CloseExeFile(e);
-end;
-
-function GetLineInfo(addr:ptruint;var func,source:shortstring;var line:longint) : boolean;
-var
-  res,
-  stabsleft,
-  stabscnt,i : longint;
-  found : boolean;
-  lastfunc : tstab;
-begin
-  GetLineInfo:=false;
-{$ifdef DEBUG_LINEINFO}
-  writeln(stderr,'GetLineInfo called');
-{$endif DEBUG_LINEINFO}
-  fillchar(func,high(func)+1,0);
-  fillchar(source,high(source)+1,0);
-  line:=0;
-  if not e.isopen then
-   begin
-     if not OpenStabs(pointer(addr)) then
-      exit;
-   end;
-
-  { correct the value to the correct address in the file }
-  { processaddress is set in OpenStabs                   }
-  addr := dword(addr - e.processaddress);
-
-{$ifdef DEBUG_LINEINFO}
-  writeln(stderr,'Addr: ',hexstr(addr,sizeof(addr)*2));
-{$endif DEBUG_LINEINFO}
-
-  fillchar(funcstab,sizeof(tstab),0);
-  fillchar(filestab,sizeof(tstab),0);
-  fillchar(dirstab,sizeof(tstab),0);
-  fillchar(linestab,sizeof(tstab),0);
-  fillchar(lastfunc,sizeof(tstab),0);
-  found:=false;
-  seek(e.f,stabofs);
-  stabsleft:=stabcnt;
-  repeat
-    if stabsleft>maxstabs then
-     stabscnt:=maxstabs
-    else
-     stabscnt:=stabsleft;
-    blockread(e.f,stabs,stabscnt*sizeof(tstab),res);
-    stabscnt:=res div sizeof(tstab);
-    for i:=0 to stabscnt-1 do
-     begin
-       case stabs[i].ntype of
-         N_BssLine,
-         N_DataLine,
-         N_TextLine :
-           begin
-             if (stabs[i].ntype=N_TextLine) and StabsFunctionRelative then
-               inc(stabs[i].nvalue,lastfunc.nvalue);
-             if (stabs[i].nvalue<=addr) and
-                (stabs[i].nvalue>linestab.nvalue) then
-              begin
-                { if it's equal we can stop and take the last info }
-                if stabs[i].nvalue=addr then
-                 found:=true
-                else
-                 linestab:=stabs[i];
-              end;
-           end;
-         N_Function :
-           begin
-             lastfunc:=stabs[i];
-             if (stabs[i].nvalue<=addr) and
-                (stabs[i].nvalue>funcstab.nvalue) then
-              begin
-                funcstab:=stabs[i];
-                fillchar(linestab,sizeof(tstab),0);
-              end;
-           end;
-         N_SourceFile,
-         N_IncludeFile :
-           begin
-             if (stabs[i].nvalue<=addr) and
-                (stabs[i].nvalue>=filestab.nvalue) then
-              begin
-                { if same value and type then the first one
-                  contained the directory PM }
-                if (stabs[i].nvalue=filestab.nvalue) and
-                   (stabs[i].ntype=filestab.ntype) then
-                  dirstab:=filestab
-                else
-                  fillchar(dirstab,sizeof(tstab),0);
-                filestab:=stabs[i];
-                fillchar(linestab,sizeof(tstab),0);
-                { if new file then func is not valid anymore PM }
-                if stabs[i].ntype=N_SourceFile then
-                  begin
-                    fillchar(funcstab,sizeof(tstab),0);
-                    fillchar(lastfunc,sizeof(tstab),0);
-                  end;
-              end;
-           end;
-       end;
-     end;
-    dec(stabsleft,stabscnt);
-  until found or (stabsleft=0);
-
-{ get the line,source,function info }
-  line:=linestab.ndesc;
-  if dirstab.ntype<>0 then
-   begin
-     seek(e.f,stabstrofs+dirstab.strpos);
-     blockread(e.f,source[1],high(source)-1,res);
-     dirlength:=strlen(@source[1]);
-     source[0]:=chr(dirlength);
-   end
-  else
-   dirlength:=0;
-  if filestab.ntype<>0 then
-   begin
-     seek(e.f,stabstrofs+filestab.strpos);
-     blockread(e.f,source[dirlength+1],high(source)-(dirlength+1),res);
-     source[0]:=chr(strlen(@source[1]));
-   end;
-  if funcstab.ntype<>0 then
-   begin
-     seek(e.f,stabstrofs+funcstab.strpos);
-     blockread(e.f,func[1],high(func)-1,res);
-     func[0]:=chr(strlen(@func[1]));
-     i:=pos(':',func);
-     if i>0 then
-      Delete(func,i,255);
-   end;
-//  if e.isopen then
-//    CloseStabs;
-  GetLineInfo:=true;
 end;
 
 function StabBackTraceStr(addr:Pointer):shortstring;

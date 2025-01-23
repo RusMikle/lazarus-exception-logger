@@ -1,5 +1,7 @@
 # lazarus-exception-logger
 
+Inkl. fork von RusMikle mit bugfix for x64 and fpc from 3.3.1 ( https://github.com/RusMikle/lazarus-exception-logger.git )
+
 Extended version of ExceptionLogger (https://github.com/beNative/lazarus).
 At the moment of unhanled exception in the application shows basic application 
 information and exception stack trace report. 

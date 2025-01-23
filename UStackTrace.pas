@@ -5,7 +5,7 @@ unit UStackTrace;
 interface
 
 uses
-  Classes, SysUtils, Contnrs, CustomLineInfo;
+  Classes, SysUtils, Contnrs, CustomLineInfo, lnfodwrf;
 
 type
   TStackFrameInfo = class
